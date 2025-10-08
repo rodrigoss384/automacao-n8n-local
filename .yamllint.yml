@@ -1,0 +1,7 @@
+# .yamllint.yml
+
+extends: default
+
+rules:
+  line-length: disable
+  document-start: disable

@@ -1,0 +1,78 @@
+services:
+  traefik:
+    image: traefik:v3.0
+    container_name: traefik_local
+    restart: unless-stopped
+    command:
+      - "--entrypoints.web.address=:80"
+      - "--entrypoints.websecure.address=:443"
+      - "--providers.docker=true"
+      - "--providers.docker.exposedbydefault=false"
+      - "--providers.file.directory=/etc/traefik/dynamic"
+      - "--api.dashboard=true" 
+    ports:
+      - "80:80"
+      - "443:443"
+      - "2222:8080" 
+    volumes:
+      - "/var/run/docker.sock:/var/run/docker.sock:ro"
+      - "./dynamic:/etc/traefik/dynamic:ro"
+      - "./certs:/certs:ro"
+    network_mode: bridge
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.traefik-http.rule=Host(`traefik.corp`)"
+      - "traefik.http.routers.traefik-http.entrypoints=web"
+      - "traefik.http.routers.traefik-http.middlewares=https-redirect@file"
+      - "traefik.http.routers.traefik-https.rule=Host(`traefik.corp`)"
+      - "traefik.http.routers.traefik-https.entrypoints=websecure"
+      - "traefik.http.routers.traefik-https.middlewares=dashboard-auth@file"
+      - "traefik.http.routers.traefik-https.service=api@internal"
+      - "traefik.http.routers.traefik-https.tls=true"
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 512M
+        reservations:
+          cpus: '0.1'
+          memory: 128M
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "20m"
+        max-file: "5"
+
+  portainer:
+    image: portainer/portainer-ce:latest
+    container_name: portainer_local
+    restart: unless-stopped
+    volumes:
+      - "/var/run/docker.sock:/var/run/docker.sock"
+      - "portainer_data:/data"
+    network_mode: bridge
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.services.portainer-svc.loadbalancer.server.port=9000"
+      - "traefik.http.routers.portainer-http.rule=Host(`portainer.corp`)"
+      - "traefik.http.routers.portainer-http.entrypoints=web"
+      - "traefik.http.routers.portainer-http.middlewares=https-redirect@file"
+      - "traefik.http.routers.portainer-https.rule=Host(`portainer.corp`)"
+      - "traefik.http.routers.portainer-https.entrypoints=websecure"
+      - "traefik.http.routers.portainer-https.service=portainer-svc"
+      - "traefik.http.routers.portainer-https.tls=true"
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 512M
+        reservations:
+          cpus: '0.1'
+          memory: 128M
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "20m"
+        max-file: "5"
+volumes:
+  portainer_data:

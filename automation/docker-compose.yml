@@ -1,0 +1,256 @@
+services:
+  n8n:
+    image: n8nio/n8n:1.110.1
+    container_name: n8n
+    restart: unless-stopped
+    volumes:
+      - n8n_data:/home/node/.n8n
+      - "/home/portainer/docker/infra/certs:/certs:ro"
+    environment:
+      - N8N_SECURE_COOKIE=false
+      - TZ=America/Sao_Paulo
+      - WEBHOOK_URL=${WEBHOOK_URL}
+      - MILVUS_API_TOKEN=${MILVUS_API_TOKEN}
+      - NODE_EXTRA_CA_CERTS=/certs/rootCA.pem
+    network_mode: bridge
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.n8n-http.rule=Host(`n8n.corp`)"
+      - "traefik.http.routers.n8n-http.entrypoints=web"
+      - "traefik.http.routers.n8n-http.middlewares=https-redirect@file"
+      - "traefik.http.routers.n8n-https.rule=Host(`n8n.corp`)"
+      - "traefik.http.routers.n8n-https.entrypoints=websecure"
+      - "traefik.http.routers.n8n-https.service=n8n"
+      - "traefik.http.services.n8n.loadbalancer.server.port=5678"
+      - "traefik.http.routers.n8n-https.tls=true"
+    deploy:
+      resources:
+        limits:
+          cpus: '2'
+          memory: 15G
+        reservations:
+          cpus: '1.5'
+          memory: 8G
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "20m"
+        max-file: "5"
+
+  evolution-api:
+    image: atendai/evolution-api:v2.2.3
+    container_name: evolution-api
+    restart: unless-stopped
+    volumes:
+      - evolution_data:/evolution/instances
+      - "/home/portainer/docker/infra/certs:/certs:ro"
+    environment:
+      - SERVER_PORT=8080
+      - SERVER_URL=${SERVER_URL}
+      - SSL_CONF_PRIVKEY=/certs/local-key.pem
+      - SLL_CONF_FULLCHAIN=/certs/local-cert.pem
+      - NODE_TLS_REJECT_UNAUTHORIZED=0
+      - PROVIDER_ENABLED=false
+      - DATABASE_ENABLED=true
+      - DATABASE_PROVIDER=postgresql
+      - DATABASE_CONNECTION_URI=${CONNECTION_URI}
+      - DATABASE_CONNECTION_CLIENT_NAME=${POSTGRES_DB}
+      - CONFIG_SESSION_PHONE_VERSION=2.3000.1026820435
+      - DATABASE_SAVE_DATA_INSTANCE=true
+      - DATABASE_SAVE_DATA_NEW_MESSAGE=true
+      - DATABASE_SAVE_MESSAGE_UPDATE=true
+      - DATABASE_SAVE_DATA_CHATS=true
+      - DATABASE_SAVE_DATA_LABELS=true
+      - DATABASE_SAVE_DATA_HISTORIC=true
+      - DATABASE_SAVE_IS_ON_WHATSAPP=true
+      - DATABASE_SAVE_IS_ON_WHATSAPP_DAYS=7
+      - DATABASE_DELETE_MESSAGE=true
+      - AUTHENTICATION_API_KEY=${API_KEY}
+      - TZ=America/Sao_Paulo
+      - LANGUAGE=pt-BR
+      - DEL_INSTANCE=false
+      - DEL_TEMP_INSTANCES=false
+      - CORS_ORIGIN=*
+      - CORS_METHODS=GET,POST,PUT,DELETE
+      - CORS_CREDENTIALS=true
+      - WEBHOOK_GLOBAL_ENABLED=false
+      - WEBHOOK_GLOBAL_URL=''
+      - WEBHOOK_GLOBAL_WEBHOOK_BY_EVENTS=false
+      - WEBHOOK_EVENTS_APPLICATION_STARTUP=false
+      - WEBHOOK_EVENTS_QRCODE_UPDATED=true
+      - WEBHOOK_EVENTS_MESSAGES_SET=true
+      - WEBHOOK_EVENTS_MESSAGES_UPSERT=true
+      - WEBHOOK_EVENTS_MESSAGES_EDITED=true
+      - WEBHOOK_EVENTS_MESSAGES_UPDATE=true
+      - WEBHOOK_EVENTS_MESSAGES_DELETE=true
+      - WEBHOOK_EVENTS_SEND_MESSAGE=true
+      - WEBHOOK_EVENTS_SEND_MESSAGE_UPDATE=true
+      - WEBHOOK_EVENTS_CONTACTS_SET=false
+      - WEBHOOK_EVENTS_CONTACTS_UPSERT=false
+      - WEBHOOK_EVENTS_CONTACTS_UPDATE=false
+      - WEBHOOK_EVENTS_PRESENCE_UPDATE=true
+      - WEBHOOK_EVENTS_CHATS_SET=true
+      - WEBHOOK_EVENTS_CHATS_UPSERT=true
+      - WEBHOOK_EVENTS_CHATS_UPDATE=true
+      - WEBHOOK_EVENTS_CHATS_DELETE=true
+      - WEBHOOK_EVENTS_GROUPS_UPSERT=true
+      - WEBHOOK_EVENTS_GROUPS_UPDATE=true
+      - WEBHOOK_EVENTS_GROUP_PARTICIPANTS_UPDATE=true
+      - WEBHOOK_EVENTS_CONNECTION_UPDATE=true
+      - WEBHOOK_EVENTS_REMOVE_INSTANCE=false
+      - WEBHOOK_EVENTS_LOGOUT_INSTANCE=false
+      - WEBHOOK_EVENTS_LABELS_EDIT=true
+      - WEBHOOK_EVENTS_LABELS_ASSOCIATION=true
+      - WEBHOOK_EVENTS_CALL=true
+      - WEBHOOK_EVENTS_TYPEBOT_START=false
+      - WEBHOOK_EVENTS_TYPEBOT_CHANGE_STATUS=false
+      - WEBHOOK_EVENTS_ERRORS=false
+      - WEBHOOK_REQUEST_TIMEOUT_MS=60000
+      - WEBHOOK_RETRY_MAX_ATTEMPTS=10
+      - WEBHOOK_RETRY_INITIAL_DELAY_SECONDS=5
+      - WEBHOOK_RETRY_USE_EXPONENTIAL_BACKOFF=true
+      - WEBHOOK_RETRY_MAX_DELAY_SECONDS=300
+      - WEBHOOK_RETRY_JITTER_FACTOR=0.2
+      - WEBHOOK_RETRY_NON_RETRYABLE_STATUS_CODES=400,401,403,404,422
+      - CONFIG_SESSION_PHONE_CLIENT=${INSTANCE_NAME}
+      - CONFIG_SESSION_PHONE_NAME=Chrome
+      - QRCODE_LIMIT=30
+      - QRCODE_COLOR='#175197'
+      - CACHE_REDIS_ENABLED=false
+    network_mode: bridge
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.services.evolution-svc.loadbalancer.server.port=8080"
+      - "traefik.http.routers.evolution-http.rule=Host(`evolution.corp`)"
+      - "traefik.http.routers.evolution-http.entrypoints=web"
+      - "traefik.http.routers.evolution-http.middlewares=https-redirect@file"
+      - "traefik.http.routers.evolution-https.rule=Host(`evolution.corp`)"
+      - "traefik.http.routers.evolution-https.entrypoints=websecure"
+      - "traefik.http.routers.evolution-https.service=evolution-svc"
+      - "traefik.http.routers.evolution-https.tls=true"
+    links:
+      - "postgres"
+    depends_on:
+      - postgres
+    deploy:
+      resources:
+        limits:
+          cpus: '2'
+          memory: 8G
+        reservations:
+          cpus: '1'
+          memory: 4G
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "20m"
+        max-file: "5"
+
+
+  redis:
+    image: redis:8.2.1
+    container_name: redis
+    restart: unless-stopped
+    command: redis-server --requirepass ${REDIS_PASSWORD}
+    volumes:
+      - redis_data:/data
+    network_mode: bridge
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "{REDIS_PASSWORD}", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    deploy:
+      resources:
+        limits:
+          cpus: '1'
+          memory: 2G
+        reservations:
+          cpus: '0.5'
+          memory: 1G
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "20m"
+        max-file: "5"
+
+  redis-cache:
+    image: redis:8.2.1
+    container_name: redis-cache
+    restart: unless-stopped
+    command: redis-server --requirepass ${REDIS_CACHE_PASSWORD}
+    volumes:
+      - redis_cache_data:/data
+    network_mode: bridge
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "{REDIS_CACHE_PASSWORD}", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    ports:
+      - "3000:6379"
+    deploy:
+      resources:
+        limits:
+          cpus: '2'
+          memory: 4G
+        reservations:
+          cpus: '0.5'
+          memory: 2G
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "20m"
+        max-file: "5"
+
+
+  postgres:
+    image: postgres:15
+    container_name: postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+      TZ: America/Sao_Paulo
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    network_mode: bridge
+    ports:
+      - "5060:5432"
+
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    deploy:
+      resources:
+        limits:
+          cpus: '1'
+          memory: 2G
+        reservations:
+          cpus: '0.5'
+          memory: 2G
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "20m"
+        max-file: "5"
+
+  k6-tester:
+    image: grafana/k6:1.2.3
+    container_name: k6-tester
+    volumes:
+      - ../:/scripts
+    working_dir: /scripts
+    network_mode: host
+
+volumes:
+  n8n_data:
+  evolution_data:
+  redis_data:
+  postgres_data:
+  redis_cache_data:

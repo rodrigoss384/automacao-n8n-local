@@ -1,0 +1,6 @@
+certs/local-cert.pem
+certs/local-key.pem
+certs/rootCA.pem
+dynamic/certificates.yml
+dynamic/middlewares.yml
+*.log

@@ -1,0 +1,4 @@
+tls:
+  certificates:
+    - certFile: /certs/<SEU_CERTIFICADO.pem>
+      keyfile: /certs/<SUA_CHAVE_PRIVADA.pem>

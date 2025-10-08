@@ -1,0 +1,6 @@
+.env
+.env.backup
+*.log
+Agente_Suporte.json
+Teste_API_Milvus.json
+

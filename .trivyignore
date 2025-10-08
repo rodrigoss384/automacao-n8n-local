@@ -1,0 +1,38 @@
+# .trivyignore
+# Aceitando risco para esta vulnerabilidade do n8n no pacote axios, pois não há correção disponível na imagem base no n8n. Monitorando para futuras atualizações.
+CVE-2025-58754
+# Aceitando risco para estas vulnerabilidades da Evolution API em diversos pacotes, pois não há correção disponível na imagem base na atendai/evolution-api. Monitorando para futuras atualizações
+CVE-2024-12797
+CVE-2024-8176
+CVE-2024-11403
+CVE-2024-11498
+CVE-2024-12797
+CVE-2024-56171
+CVE-2025-24928
+CVE-2025-27113
+CVE-2025-32414
+CVE-2025-32415
+CVE-2025-47917
+CVE-2025-48965
+CVE-2025-48965
+CVE-2025-31115
+CVE-2025-27152
+CVE-2024-21538
+CVE-2025-7783
+CVE-2025-47935
+CVE-2025-47944
+CVE-2025-48997
+CVE-2025-7338
+CVE-2025-48387
+CVE-2025-47907
+CVE-2025-59375
+CVE-2025-47906
+# Aceitando risco para estas vulnerabilidades do Redis em alguns pacotes, pois não há correção disponível na imagem base do redis. Monitorando para futuras atualizações.
+CVE-2025-6020
+CVE-2023-45853
+# Aceitando risco para estas vulnerabilidades do Postgres em alguns pacotes, pois não há correção disponível na imagem base do Postgres. Monitorando para futuras atualizações.
+CVE-2025-7425
+CVE-2025-22874
+# Ignorando a chave privada "snakeoil" que é um falso positivo comum na imagem base do PostgreSQL.
+Asymmetric Private Key (private-key)
+Asymmetric Private Key

@@ -1,0 +1,13 @@
+http:
+  middlewares:
+    https-redirect:
+      redirectScheme:
+        scheme: https
+        permanent: true
+
+    dashboard-auth:
+      basicAuth:
+        users:
+          # Gere sua senha com:
+          # docker run --rm httpd:2.4 htpasswd -nb seu_usuario sua_senha
+          - "seu_usuario:$apr1$qFtx5XTt$6qMmjEQlf0ejoSnyyJinkg"
