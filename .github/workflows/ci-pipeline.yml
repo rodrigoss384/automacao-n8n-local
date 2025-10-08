@@ -1,0 +1,186 @@
+# .github/workflows/ci-pipeline.yml
+
+name: CI Pipeline - Validação e Testes de Serviço
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    types: [ closed ]
+    branches: [ main ]
+
+jobs:
+  analise-yaml:
+    name: Verificar Formatação YAML
+    if: github.event.pull_request.merged == true || github.event_name == 'push'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Executar YAML Lint no Docker Compose de Automation
+        uses: ibiqlik/action-yamllint@v3
+        with:
+          config_file: .yamllint.yml
+          file_or_dir: ./automation/docker-compose.yml
+
+      - name: Executar YAML Lint no Docker Compose de Infra
+        uses: ibiqlik/action-yamllint@v3
+        with:
+          config_file: .yamllint.yml
+          file_or_dir: ./infra/docker-compose.yml
+
+  scan-seguranca:
+    name: Scan de Vulnerabilidades (Trivy)
+    if: github.event.pull_request.merged == true || github.event_name == 'push'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Scan da imagem n8n por vulnerabilidades
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: 'n8nio/n8n:1.110.1'
+          format: 'table'
+          exit-code: '1'
+          severity: 'CRITICAL,HIGH'
+          trivyignores: '.trivyignore'
+
+      - name: Scan da imagem evolution-api por vulnerabilidades
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: 'atendai/evolution-api:v2.2.3'
+          format: 'table'
+          exit-code: '1'
+          severity: 'CRITICAL,HIGH'
+          trivyignores: '.trivyignore'
+
+      - name: Scan da imagem Redis por vulnerabilidades
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: 'redis:8.2.1'
+          format: 'table'
+          exit-code: '1'
+          severity: 'CRITICAL,HIGH'
+          trivyignores: '.trivyignore'
+
+      - name: Scan da imagem Postgres por vulnerabilidades
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: 'postgres:15'
+          format: 'table'
+          exit-code: '1'
+          severity: 'CRITICAL'
+          trivyignores: '.trivyignore'
+
+      - name: Scan da imagem Grafana/K6 por vulnerabilidades
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: 'grafana/k6:1.2.3'
+          format: 'table'
+          exit-code: '1'
+          severity: 'CRITICAL'
+          trivyignores: '.trivyignore'
+
+  validar-e-testar:
+    name: Validar variaveis de ambiente e Testar
+    needs: [analise-yaml, scan-seguranca]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Criar arquivo .env de teste
+        run: |
+          echo "POSTGRES_USER=test" >> ./automation/.env
+          echo "POSTGRES_PASSWORD=test" >> ./automation/.env
+          echo "POSTGRES_DB=test" >> ./automation/.env
+          echo "REDIS_PASSWORD=test" >> ./automation/.env
+          echo "CONNECTION_URI=postgresql://test:test@postgres:5432/test" >> ./automation/.env
+          echo "WEBHOOK_URL=http://localhost:5678" >> ./automation/.env
+          echo "SERVER_URL=http://localhost:8080" >> ./automation/.env
+          echo "API_KEY=testkey" >> ./automation/.env
+
+      - name: Listar arquivos no diretório automation
+        run: ls -la ./automation
+
+      - name: Subir serviços com Docker Compose
+        working-directory: ./automation
+        run: docker compose up -d --build
+
+      - name: Aguardar o PostgreSQL ficar pronto
+        run: |
+          echo "Aguardando o contêiner do PostgreSQL..."
+          # Tenta por até 60 segundos (12 tentativas de 5 segundos)
+          for i in {1..12}; do
+            # Executa o comando 'pg_isready' dentro do contêiner postgres
+            if docker exec postgres pg_isready -U testuser -d testdb -h localhost; then
+              echo "✅ PostgreSQL está pronto para receber conexões."
+              exit 0
+            fi
+            echo "Ainda aguardando... ($i/12)"
+            sleep 5
+          done
+          echo "❌ Erro: PostgreSQL não ficou pronto a tempo."
+          exit 1
+
+      - name: Aguardar inicialização da Evolution API
+        run: sleep 15 # Aumentamos o tempo para garantir que os logs sejam gerados
+
+      - name: Verificar logs da Evolution API
+        run: |
+          echo "Verificando logs do evolution-api..."
+          # O 'grep' falhará se não encontrar a string, o que fará o pipeline falhar.
+          docker logs evolution-api | grep "HTTP - ON: 8080"
+          echo "✅ Sucesso! Evolution API iniciada corretamente."
+
+      - name: Verificar logs do PostgreSQL
+        run: |
+          echo "Verificando logs do postgres..."
+          # O '!' inverte o resultado. O pipeline falhará se a string "Migration Failed" for encontrada.
+          if docker logs postgres | grep "Migration Failed"; then
+            echo "❌ Erro! Falha na migração do PostgreSQL encontrada."
+            exit 1
+          else
+            echo "✅ Sucesso! Nenhuma falha de migração encontrada no PostgreSQL."
+          fi
+
+  teste-carga:
+    name: Teste de Carga
+    runs-on: ubuntu-latest
+    needs: validar-e-testar
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Criar .env para teste de carga
+        run: |
+          echo "POSTGRES_USER=testuser" > ./automation/.env
+          echo "POSTGRES_PASSWORD=testpass" >> ./automation/.env
+          echo "POSTGRES_DB=testdb" >> ./automation/.env
+          echo "REDIS_PASSWORD=test" >> ./automation/.env
+          echo "CONNECTION_URI=postgresql://testuser:testpass@postgres:5432/testdb" >> ./automation/.env
+          echo "SERVER_URL=http://localhost:5678" >> ./automation/.env
+          echo "API_KEY=testkey" >> ./automation/.env
+          echo "WEBHOOK_TUNNEL_URL=http://localhost:5678/" >> ./automation/.env
+
+      - name: Subir serviços em segundo plano
+        working-directory: ./automation
+        run: docker compose up -d
+
+      - name: Aguardar n8n ficar pronto e carregar workflows
+        run: |
+          echo "Aguardando o n8n sinalizar 'Editor is now accessible' nos logs..."
+          timeout 120s bash -c 'until curl -s --fail http://localhost:5678/healthz; do sleep 2; done'
+          echo "✅ n8n iniciou e está pronto pra testes."
+
+      - name: Rodar Teste de Carga com k6
+        working-directory: ./automation
+        run: docker compose run --rm k6-tester run /scripts/load-test.js
+
+      - name: Desligar serviços (cleanup)
+        if: always()
+        working-directory: ./automation
+        run: docker compose down

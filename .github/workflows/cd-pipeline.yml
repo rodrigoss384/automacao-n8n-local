@@ -1,0 +1,33 @@
+# .github/workflows/cd-pipeline.yml
+
+name: CD Pipeline - Deploy Local
+
+on:
+  workflow_run:
+    workflows: ["CI Pipeline - Validação e Testes de Serviço"]
+    types:
+      - completed
+    branches:
+      - main
+
+jobs:
+  deploy:
+    if: ${{ github.event.workflow_run.conclusion == 'success' }}
+
+    # Aponta para o seu runner local
+    runs-on: self-hosted
+
+    steps:
+      - name: 1. Fazer Checkout do código mais recente
+        uses: actions/checkout@v4
+
+      - name: 2. Baixar as imagens Docker mais recentes
+        working-directory: ./automation
+        run: docker compose -p automation --env-file /home/portainer/docker/automation/.env pull
+
+      - name: 3. Reiniciar os serviços com as novas imagens
+        working-directory: ./automation
+        run: docker compose -p automation --env-file /home/portainer/docker/automation/.env  up -d --remove-orphans
+
+      - name: 4. Limpar imagens Docker antigas e não utilizadas
+        run: docker image prune -f
